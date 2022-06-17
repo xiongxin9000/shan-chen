@@ -15,7 +15,7 @@ double A_r=0.0001,A_b=0.0001;//parameter that affect the interfacial intension i
 double beta=0.99; //parameter that affect the interface thickness in Recoloring step 
 double C_eq_r[n],C_eq_b[n];//aditional term in equilibrium distribution function
 double a_k_r,a_k_b;//parameter to adjust density ratio in equilibrium distribution function 
-double rho_r0=0.5,rho_b0=2;
+double rho_r0=0.5,rho_b0=1;
 double radius=mx/10;
 double a=mx/10,b=my/5;
 int dx=1,dy=1; //space and time step
