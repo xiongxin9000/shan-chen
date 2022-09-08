@@ -5,28 +5,31 @@
 #include <cmath> // for fabs()
 int const static n=9,mx=200,my=200; //number of latttice nodes
 int c=2;//different cases
-double f[n][mx][my],feq[n],rho[mx][my],cx[n],cy[n],w[n],ux[mx][my],uy[mx][my],x[mx],y[my];
+double f[n][mx][my],feq[n],rho[mx][my],w[n],ux[mx][my],uy[mx][my],x[mx],y[my];
+const int cx[n]={0, 1, 0, -1, 0, 1, -1, -1, 1};
+const int cy[n]={0, 0, 1, 0, -1, 1, 1, -1, -1};
 double Fx[mx][my]; // x-component of Shan-Chen force
 double Fy[mx][my]; // y-component of Shan-Chen force
-double forcing[mx][my];
+double forcing[n];
 double rho_l=1.95,rho_g=0.15;
 double radius=mx/8;
 double a=mx/10,b=my/5;
 int i,j;
 int dx=1,dy=1; //space and time step
-double const alpha=0.02;
+double const alpha=0.4;
 double omega=1.0/(3.*alpha+0.5);
-int mstep=10; // The total number of time steps
+int mstep=500; // The total number of time steps
+int freq=10;
 double rho0=1.0;//reference density 
 const double g = -4.7;//interaction strength between particles.
-void result(double ux[mx][my],double uy[mx][my],double rho[mx][my],double x[mx], double y[my],std::string filename,double f[9][mx][my],double feq[9],int time)
+void result(std::string filename,int time)
 {
 
 std::ofstream out(filename);
   out << "TITLE=\"LBM output\"" << std::endl;
   out << "VARIABLES = \"X\", \"Y\", \"Ux\",\"Uy\",\"density\",\"f0\",\"f1\",\"f2\",\"f3\",\"f4\",\"f5\",\"f6\",\"f7\",\"f8\",\"feq0\",\"feq1\",\"feq2\",\"feq3\",\"feq4\",\"feq5\",\"feq6\",\"feq7\",\"feq8\"," << std::endl;
   out << "ZONE T = \"fluid\", I=" << mx << ", J=" << my << ", F=POINT" << std::endl;
-  out << "SOLUTIONTIME="<< time << std::endl;
+  //out << "SOLUTIONTIME="<< time << std::endl;
   for (unsigned j = 0; j < my; ++j)
     for (unsigned i = 0; i < mx; ++i)
     {
@@ -75,19 +78,26 @@ double psi(double dense)
 }
 void ComputeSCForce()
 {
-    double fxtem=0;
-    double fytem=0;
-    for(int i=1;i<mx-1;i++)
+    for(int i=0;i<mx;i++)
     {
-        for (int j=1;j<my-1;j++)
+        for (int j=0;j<my;j++)
         {
-            for(int k=0;k<9;k++)
+            double fxtem=0;
+            double fytem=0;
+            for(int k=1;k<9;k++)
             {
-
-                double dense= rho[i][j];
+                int i1=(i+cx[k]+mx)%mx;
+                int j1=(j+cy[k]+my)%my;
+                // std::cout<<"i1="<<i1<<std::endl;
+                // std::cout<<"j1="<<i1<<std::endl;
+                double dense= rho[i1][j1];
+                // std::cout<<"dense="<<dense<<std::endl;
                 double psinb=psi(dense);//psi(x+c*deltat)
+                // std::cout<<"psinb="<<psinb<<std::endl;
                 fxtem += w[k] * cx[k] * psinb;//psi(x+c*deltat)*w*c
                 fytem += w[k] * cy[k] * psinb;
+                // std::cout<<"fxtem="<<fxtem<<std::endl;
+                // std::cout<<"fytem="<<fytem<<std::endl;
             }
             double psiloc = psi(rho[i][j]);//psi(x)
             fxtem *= (-g * psiloc);//g*psi(x)*psi(x+c*deltat)*w*c
@@ -124,6 +134,10 @@ void ComputeEquilibrium(int i,int j)
     double vx = ux[i][j];
     double vy = uy[i][j];
     double usq = vx * vx + vy * vy;
+    // std::cout<<"dens= "<<dens<<std::endl;
+    // std::cout<<"vx= "<<vx<<std::endl;
+    // std::cout<<"vy= "<<vy<<std::endl;
+    // std::cout<<"usq= "<<usq<<std::endl;
     feq[0] = w[0] * dens * (1. - 1.5 * usq);
     feq[1] = w[1] * dens * (1. + 3. * vx + 4.5 * vx * vx - 1.5 * usq);
     feq[2] = w[2] * dens * (1. + 3. * vy + 4.5 * vy * vy - 1.5 * usq);
@@ -134,15 +148,9 @@ void ComputeEquilibrium(int i,int j)
     feq[7] = w[7] * dens * (1. + 3. * (-vx - vy) + 4.5 * ( vx + vy) * ( vx + vy) - 1.5 * usq);
     feq[8] = w[8] * dens * (1. + 3. * ( vx - vy) + 4.5 * ( vx - vy) * ( vx - vy) - 1.5 * usq);
 }
-void ComputeGuoForce(int i,int j)
+void ComputeGuoForce(int i,int j,int k)
 {
-    for (i = 0; i < mx; i++) 
-    {
-        for(j=0;j<my;j++)
-        {
-            forcing[i][j] = w[i] * (1. - 0.5 * omega) * ((3. * (cx[i] - ux[i][j]) + 9. * cx[i] * (cx[i] * ux[i][j] + cy[i] * uy[i][j])) * Fx[i][j] + (3. * (cy[i] - uy[i][j]) + 9. * cy[i] * (cx[i] * ux[i][j] + cy[i] * uy[i][j])) * Fy[i][j]);
-        }
-    }
+        forcing[k] = w[k] * (1. - 0.5 * omega) * ((3. * (cx[k] - ux[i][j]) + 9. * cx[k] * (cx[k] * ux[i][j] + cy[k] * uy[i][j])) * Fx[i][j] + (3. * (cy[k] - uy[i][j]) + 9. * cy[k] * (cx[k] * ux[i][j] + cy[k] * uy[i][j])) * Fy[i][j]);
 }
 void Collision(double ftem[n][mx][my])
 {
@@ -152,54 +160,42 @@ void Collision(double ftem[n][mx][my])
         {
             for (int k=0;k<9;k++)
             {
-                ftem[k][i][j] = ftem[k][i][j] * (1. - omega) + feq[k] * omega + forcing[i][j] ;
+                ComputeEquilibrium(i,j);
+                ComputeGuoForce(i,j,k);
+                ftem[k][i][j] = ftem[k][i][j] * (1. - omega) + feq[k] * omega + forcing[k] ;
             }
         }
     }
 }
 void Streaming(double ftem[n][mx][my])
 {
-    for (int j=0;j<my;j++)
-    {
-        for(int i=mx-1;i>0;i--)
-        {
-            f[1][i][j]=f[1][i-1][j];
-        }
-        for(int i=0;i<mx-1;i++)
-        {
-            f[3][i][j]=f[3][i+1][j];
-        }
-    }
-
-    for(int j=my-1;j>0;j--)
-    {
-        for(int i=0;i<mx;i++)
-        {
-            f[2][i][j]=f[2][i][j-1];
-        }
-        for(int i=mx-1;i>0;i--)
-        {
-            f[5][i][j]=f[5][i-1][j-1];
-        }
-        for(int i=0;i<mx-1;i++)
-        {
-            f[6][i][j]=f[6][i+1][j-1];
-        }
-    }
-
+    double f_hlp[9][mx][my];
     for(int j=0;j<my;j++)
     {
-        for(int i=0;i<mx;i++)
+        for (int i=0;i<mx;i++)
         {
-            f[4][i][j]=f[4][i][j+1];
+            int y_n = (1+j)%my;
+            int x_e = (1+i)%mx;
+            int y_s = my - 1 - (my- j)%my;
+            int x_w = mx - 1 - (mx- i)%mx;
+            f_hlp[1][x_e][j] = ftem[1][i][j];
+            f_hlp[2][i][y_n] = ftem[2][i][j];
+            f_hlp[3][x_w][j] = ftem[3][i][j];
+            f_hlp[4][i][y_s] = ftem[4][i][j];
+            f_hlp[5][x_e][y_n] = ftem[5][i][j];
+            f_hlp[6][x_w][y_n] = ftem[6][i][j];
+            f_hlp[7][x_w][y_s] = ftem[7][i][j];
+            f_hlp[8][x_e][y_s] = ftem[8][i][j];
         }
-        for(int i=0;i<mx-1;i++)
+    }
+    for(int j=0;j<my;j++)
+    {
+        for (int i=0;i<mx;i++)
         {
-            f[7][i][j]=f[7][i+1][j+1];
-        }
-        for(int i=mx-1;i>0;i--)
-        {
-            f[8][i][j]=f[8][i-1][j+1];
+            for(int k=1;k<9;k++)
+            {
+                ftem[k][i][j]=f_hlp[k][i][j];
+            }
         }
     }
 }
@@ -207,24 +203,24 @@ void BoundaryCondition(double ftem[n][mx][my])
 {
     for(int j=0;j<my;j++)
     {
-        f[1][0][j]=f[3][0][j];//left
-        f[5][0][j]=f[7][0][j];
-        f[8][0][j]=f[6][0][j];
+        ftem[1][0][j]=ftem[3][0][j];//left
+        ftem[5][0][j]=ftem[7][0][j];
+        ftem[8][0][j]=ftem[6][0][j];
 
-        f[3][mx-1][j]=f[1][mx-1][j];//right
-        f[7][mx-1][j]=f[5][mx-1][j];
-        f[6][mx-1][j]=f[8][mx-1][j];
+        ftem[3][mx-1][j]=ftem[1][mx-1][j];//right
+        ftem[7][mx-1][j]=ftem[5][mx-1][j];
+        ftem[6][mx-1][j]=ftem[8][mx-1][j];
     }
 
     for (int i=0;i<mx;i++)
     {
-        f[2][i][0]=f[4][i][0];//bottom
-        f[5][i][0]=f[7][i][0];
-        f[6][i][0]=f[8][i][0];
+        ftem[2][i][0]=ftem[4][i][0];//bottom
+        ftem[5][i][0]=ftem[7][i][0];
+        ftem[6][i][0]=ftem[8][i][0];
 
-        f[4][i][my-1]=f[2][i][my-1];//top
-        f[7][i][my-1]=f[5][i][my-1];
-        f[8][i][my-1]=f[6][i][my-1];
+        ftem[4][i][my-1]=ftem[2][i][my-1];//top
+        ftem[7][i][my-1]=ftem[5][i][my-1];
+        ftem[8][i][my-1]=ftem[6][i][my-1];
     }
 }
 void initialize()
@@ -253,12 +249,6 @@ w[0]=4./9;
         w[i]=1./36;
     }
 /*---------weight factor ----------*/
-
-/*---------streaming vector--------*/
-cx[0]=0,cx[1]=1,cx[2]=0,cx[3]=-1,cx[4]=0,cx[5]=1,cx[6]=-1,cx[7]=-1,cx[8]=1;
-cy[0]=0,cy[1]=0,cy[2]=1,cy[3]=0,cy[4]=-1,cy[5]=1,cy[6]=1,cy[7]=-1,cy[8]=-1;
-/*---------streaming vector--------*/
-
 /*initial condition--------------*/
     for(int i=0;i<mx;i++)
     {
@@ -307,10 +297,10 @@ cy[0]=0,cy[1]=0,cy[2]=1,cy[3]=0,cy[4]=-1,cy[5]=1,cy[6]=1,cy[7]=-1,cy[8]=-1;
        {
            for(int k=0;k<9;k++)
            {
-               ComputeEquilibrium(i,j);
-               f[k][i][j]=feq[k];
                ux[i][j]=0;
                uy[i][j]=0;
+               ComputeEquilibrium(i,j);
+               f[k][i][j]=feq[k];
            }
        }
     }
@@ -322,24 +312,20 @@ int main()
 initialize();
 int time=0;
 std::string filename = std::string("animation") +std::to_string(time)+std::string(".dat");
-result(ux,uy,rho,x, y,filename,f,feq,time);
+result(filename,time);
 for (time=1;time<mstep+1;++time)
 {
+ComputeDesnity(f);
 ComputeSCForce();//only novelty which contribute to equilibrium velocity and macroscopic velocity 
 ComputeVelocity(f);
-ComputeEquilibrium(i,j);
-ComputeGuoForce(i,j);
 Collision(f);//plus GuoForce 
 Streaming(f);
 BoundaryCondition(f);
-ComputeDesnity(f);
-ComputeVelocity(f);
 std::string filename = std::string("animation") +std::to_string(time)+std::string(".dat");
-result(ux,uy,rho,x, y,filename,f,feq,time);
+if(time%freq==0) result(filename,time);
+if(time%freq==0) {
+    std::cout << "Iteration: " << time << " / " << mstep << " (" << 100.0*double(time)/double(mstep) << " %)" <<  std::endl;
+}
 }//main loop end
 return 0;
 }
-
-
-
-
