@@ -5,21 +5,22 @@
 #include <cmath> // for fabs()
 int const static n=9,mx=200,my=200; //number of latttice nodes
 int c=2;//different cases
-double f[n][mx][my],feq[n],rho[mx][my],w[n],ux[mx][my],uy[mx][my],x[mx],y[my];
+double f[n][mx][my],f2[n][mx][my],feq[n],rho[mx][my],w[n],ux[mx][my],uy[mx][my],x[mx],y[my];
 const int cx[n]={0, 1, 0, -1, 0, 1, -1, -1, 1};
 const int cy[n]={0, 0, 1, 0, -1, 1, 1, -1, -1};
 double Fx[mx][my]; // x-component of Shan-Chen force
 double Fy[mx][my]; // y-component of Shan-Chen force
 double forcing[n];
-double rho_l=1.95,rho_g=0.15;
+double rho_l=0.15,rho_g=1.95;
 double radius=mx/8;
 double a=mx/10,b=my/5;
 int i,j;
 int dx=1,dy=1; //space and time step
-double const alpha=0.4;
-double omega=1.0/(3.*alpha+0.5);
-int mstep=500; // The total number of time steps
-int freq=10;
+// double const alpha=0.4;
+// double omega=1.0/(3.*alpha+0.5);
+double omega=1.0;
+int mstep=50000; // The total number of time steps
+int freq=1000;
 double rho0=1.0;//reference density 
 const double g = -4.7;//interaction strength between particles.
 void result(std::string filename,int time)
@@ -150,9 +151,12 @@ void ComputeEquilibrium(int i,int j)
 }
 void ComputeGuoForce(int i,int j,int k)
 {
-        forcing[k] = w[k] * (1. - 0.5 * omega) * ((3. * (cx[k] - ux[i][j]) + 9. * cx[k] * (cx[k] * ux[i][j] + cy[k] * uy[i][j])) * Fx[i][j] + (3. * (cy[k] - uy[i][j]) + 9. * cy[k] * (cx[k] * ux[i][j] + cy[k] * uy[i][j])) * Fy[i][j]);
+        double temp=cx[k] * ux[i][j] + cy[k] * uy[i][j];
+        forcing[k] = w[k] * (1. - 0.5 * omega) * 
+        ((3. * (cx[k] - ux[i][j]) + 9. * cx[k] * temp) * Fx[i][j] + 
+        (3. * (cy[k] - uy[i][j]) + 9. * cy[k] * temp) * Fy[i][j]);
 }
-void Collision(double ftem[n][mx][my])
+void Collision(double ftem[n][mx][my],double ftem2[n][mx][my])
 {
     for(int i=0;i<mx;i++)
     {
@@ -162,7 +166,9 @@ void Collision(double ftem[n][mx][my])
             {
                 ComputeEquilibrium(i,j);
                 ComputeGuoForce(i,j,k);
-                ftem[k][i][j] = ftem[k][i][j] * (1. - omega) + feq[k] * omega + forcing[k] ;
+                int i2 = (i + cx[k] + mx) % mx;
+                int j2 = (j + cy[k] + my) % my;
+                ftem2[k][i2][j2] = ftem[k][i][j] * (1. - omega) + feq[k] * omega + forcing[k] ;
             }
         }
     }
@@ -301,6 +307,7 @@ w[0]=4./9;
                uy[i][j]=0;
                ComputeEquilibrium(i,j);
                f[k][i][j]=feq[k];
+               f2[k][i][j]=feq[k];
            }
        }
     }
@@ -318,9 +325,10 @@ for (time=1;time<mstep+1;++time)
 ComputeDesnity(f);
 ComputeSCForce();//only novelty which contribute to equilibrium velocity and macroscopic velocity 
 ComputeVelocity(f);
-Collision(f);//plus GuoForce 
-Streaming(f);
-BoundaryCondition(f);
+Collision(f,f2);//plus GuoForce 
+std::swap(f,f2);
+//Streaming(f);
+//BoundaryCondition(f);
 std::string filename = std::string("animation") +std::to_string(time)+std::string(".dat");
 if(time%freq==0) result(filename,time);
 if(time%freq==0) {
