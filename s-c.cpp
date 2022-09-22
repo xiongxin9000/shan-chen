@@ -12,16 +12,16 @@ double press[mx][my];
 double Fx[mx][my]; // x-component of Shan-Chen force
 double Fy[mx][my]; // y-component of Shan-Chen force
 double forcing[n];
-double rho_l=1.95,rho_g=0.15;
-double radius=mx/8;
+double rho_l= 7.306,rho_g=0.3719;
+double radius=50;
 double a=mx/10,b=my/5;
 int i,j;
 int dx=1,dy=1; //space and time step
 // double const alpha=0.4;
 // double omega=1.0/(3.*alpha+0.5);
 double omega=1.0;
-int mstep=100; // The total number of time steps
-int freq=10;
+int mstep=3; // The total number of time steps
+int freq=1;
 double rho0=1.0;//reference density 
 const double g = -4.7;//interaction strength between particles.
 void result(std::string filename,int time)
@@ -265,7 +265,18 @@ w[0]=4./9;
             {
             case 1:
             {
-                if((x[i]-mx/2)*(x[i]-my/2)+(y[j]-mx/2)*(y[j]-my/2)<radius*radius)
+            //smooth the interface 
+            double c=(x[i]-mx/2)*(x[i]-my/2)+(y[j]-mx/2)*(y[j]-my/2);
+            double w=5;
+            double factor1 = 0.5 * (rho_l-rho_g);
+            double temp=0.5 * (rho_l+rho_g);
+            double factor2 = sqrt(pow((i-0.5*mx), 2) + pow((j-0.5*my), 2));
+            factor2 = 2.0 * (factor2 - radius) / w;
+            if(c>(radius-w/2)*(radius-w/2) || c<(radius+w/2)*(radius+w/2))
+            {
+                rho[i][j] = temp+factor1 * tanh(factor2);
+            }
+            else if(c<(radius-w/2)*(radius-w/2))
             {
                 rho[i][j]=rho_l;
             }
