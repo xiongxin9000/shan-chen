@@ -4,7 +4,7 @@
 #include <sstream>
 #include <cmath> // for fabs()
 int const static n=9,mx=200,my=200; //number of latttice nodes
-int c=1;//different cases
+int c=3;//different cases
 double f[n][mx][my],f2[n][mx][my],feq[n],rho[mx][my],w[n],ux[mx][my],uy[mx][my],x[mx],y[my];
 const int cx[n]={0, 1, 0, -1, 0, 1, -1, -1, 1};
 const int cy[n]={0, 0, 1, 0, -1, 1, 1, -1, -1};
@@ -13,7 +13,7 @@ double Fx[mx][my]; // x-component of Shan-Chen force
 double Fy[mx][my]; // y-component of Shan-Chen force
 double forcing[n];
 double rho_l= 7.306,rho_g=0.3719;
-double radius=50;
+double radius=25;
 double a=mx/10,b=my/5;
 int i,j;
 int dx=1,dy=1; //space and time step
@@ -261,48 +261,55 @@ w[0]=4./9;
     {
         for (int j=0;j<my;j++)
         {
-            switch (c)
-            {
-            case 1:
-            {
-            //smooth the interface 
-            double c=(x[i]-mx/2)*(x[i]-my/2)+(y[j]-mx/2)*(y[j]-my/2);
             double w=5;
             double factor1 = 0.5 * (rho_l-rho_g);
             double temp=0.5 * (rho_l+rho_g);
             double factor2 = sqrt(pow((i-0.5*mx), 2) + pow((j-0.5*my), 2));
             factor2 = 2.0 * (factor2 - radius) / w;
-            if(c>(radius-w/2)*(radius-w/2) || c<(radius+w/2)*(radius+w/2))
+            switch (c)
             {
-                rho[i][j] = temp+factor1 * tanh(factor2);
-            }
-            else if(c<(radius-w/2)*(radius-w/2))
+            case 1:
             {
-                rho[i][j]=rho_l;
-            }
-            else
-            rho[i][j]=rho_g;
-                break;
+            //smooth the interface 
+            //droplet
+            rho[i][j] = temp-factor1 * tanh(factor2);
+            //bubble 
+            //rho[i][j] = temp+factor1 * tanh(factor2);
+            break;
             }
             case 2:
             {
-                if((x[i]-mx/2+radius-1)*(x[i]-mx/2+radius-1)+(y[j]-my/2)*(y[j]-my/2)<radius*radius
-            ||(x[i]-mx/2-radius+1)*(x[i]-mx/2-radius+1)+(y[j]-my/2)*(y[j]-my/2)<radius*radius)
-            {
-                rho[i][j]=rho_l;
-            }
-            else
-            rho[i][j]=rho_g;
-                break;
+                //1.Wetting boundary conditions for multicomponent pseudopotential lattice Boltzmann
+                // double factor3=pow((i-0.5*mx-radius), 2) + pow((j-0.5*my), 2)-radius*radius;
+                // double factor4=pow((i-0.5*mx+radius), 2) + pow((j-0.5*my), 2)-radius*radius;
+                // rho[i][j]=rho_g+factor1*(1-tanh(factor3/(w*w)))+factor1*(1-tanh(factor4/(w*w)));
+                // break;
+                //2.initialized in two axisymmetric parts based on case 1. 
+                double factor3 = sqrt(pow((i-0.5*mx-radius), 2) + pow((j-0.5*my), 2));
+                factor3 = 2.0 * (factor3 - radius) / w;
+                double factor4 = sqrt(pow((i-0.5*mx+radius), 2) + pow((j-0.5*my), 2));
+                factor4 = 2.0 * (factor4 - radius) / w;
+                if (x[i]>mx/2) rho[i][j] = temp+factor1 * tanh(factor3);
+                else rho[i][j] = temp+factor1 * tanh(factor4);
+            break;
             }
             case 3:
             {
-                if((x[i]-mx/2)*(x[i]-my/2)/(a*a)+(y[j]-mx/2)*(y[j]-my/2)/(b*b)<1)
-            {
-                rho[i][j]=rho_l;
-            }
-            else
-            rho[i][j]=rho_g;
+                //Force approach for the pseudopotential lattice Boltzmann method
+                double e=sqrt(1-(a/b)*(a/b));
+                double theta;
+                double R0;
+                if (i!=0.5*mx&&j!=0.5*my)
+                {
+                    theta=atan((j-0.5*my)/(i-0.5*mx));
+                    R0=a/sqrt(1-pow(e*cos(theta),2));
+                }
+                else if(j==0.5*my&&i<0.5*mx) R0=a/sqrt(1-pow(-e,2));
+                else if(j==0.5*my&&i>0.5*mx) R0=a/sqrt(1-pow(e,2));
+                else if(i==0.5*mx) R0=a/sqrt(1-pow(0,2));
+                factor2=sqrt(pow((i-0.5*mx), 2) + pow((j-0.5*my), 2));
+                factor2 = 2*(factor2 - R0) / w;
+                rho[i][j] = temp+factor1 * tanh(factor2);
                 break;
             }
             }
