@@ -3,8 +3,8 @@
 #include <fstream>
 #include <sstream>
 #include <cmath> // for fabs()
-int const static n=9,mx=100,my=100; //number of latttice nodes
-int c=1;//different cases
+int const static n=9,mx=20,my=200; //number of latttice nodes
+int c=2;//different cases
 int eos=2;//different equation of state :: eos=1 and default standard eos. eos=2 C-S equation of state. 
 double R=1.0;
 double A=1.0;
@@ -17,7 +17,7 @@ double press[mx][my];
 double Fx[mx][my]; // x-component of Shan-Chen force
 double Fy[mx][my]; // y-component of Shan-Chen force
 double forcing[n];
-double rho_l= 0.40600,rho_g=0.00102067;
+double rho_l= 2.1,rho_g=0.15;
 double radius=25;
 double a=mx/10,b=my/5;
 int i,j;
@@ -313,95 +313,20 @@ w[0]=4./9;
     {
         for (int j=0;j<my;j++)
         {
-            double w=10;
-            double factor1 = 0.5 * (rho_l-rho_g);
-            double temp=0.5 * (rho_l+rho_g);
-            double factor2 = sqrt(pow((i-0.5*mx), 2) + pow((j-0.5*my), 2));
-            factor2 = 2.0 * (factor2 - radius) / w;
             switch (c)
             {
-            case 1://single bubble or droplet with smooth interface
-            {
-            //smooth the interface 
-            //droplet
-            //rho[i][j] = temp-factor1 * tanh(factor2);
-            //bubble 
-            rho[i][j] = temp+factor1 * tanh(factor2);
-            break;
-            }
-            case 2: //two droplets or bubbles merge with smmoth interface 
-            {
-                //1.Wetting boundary conditions for multicomponent pseudopotential lattice Boltzmann
-                // double factor3=pow((i-0.5*mx-radius), 2) + pow((j-0.5*my), 2)-radius*radius;
-                // double factor4=pow((i-0.5*mx+radius), 2) + pow((j-0.5*my), 2)-radius*radius;
-                // rho[i][j]=rho_g+factor1*(1-tanh(factor3/(w*w)))+factor1*(1-tanh(factor4/(w*w)));
-                // break;
-                //2.initialized in two axisymmetric parts based on case 1. 
-                double factor3 = sqrt(pow((i-0.5*mx-radius), 2) + pow((j-0.5*my), 2));
-                factor3 = 2.0 * (factor3 - radius) / w;
-                double factor4 = sqrt(pow((i-0.5*mx+radius), 2) + pow((j-0.5*my), 2));
-                factor4 = 2.0 * (factor4 - radius) / w;
-                //bubble
-                if (x[i]>mx/2) rho[i][j] = temp+factor1 * tanh(factor3);
-                else rho[i][j] = temp+factor1 * tanh(factor4);
-                //droplet
-                // if (x[i]>mx/2) rho[i][j] = temp-factor1 * tanh(factor3);
-                // else rho[i][j] = temp-factor1 * tanh(factor4);
-            break;
-            }
-            case 3: //elliptic droplet or bubble with smmoth interface
-            {
-                //Force approach for the pseudopotential lattice Boltzmann method
-                double e=sqrt(1-(a/b)*(a/b));
-                double theta;
-                double R0;
-                if (i!=0.5*mx&&j!=0.5*my)
+                case 1:
                 {
-                    theta=atan((j-0.5*my)/(i-0.5*mx));
-                    R0=a/sqrt(1-pow(e*cos(theta),2));
-                }
-                else if(j==0.5*my&&i<0.5*mx) R0=a/sqrt(1-pow(-e,2));
-                else if(j==0.5*my&&i>0.5*mx) R0=a/sqrt(1-pow(e,2));
-                else if(i==0.5*mx) R0=a/sqrt(1-pow(0,2));
-                factor2=sqrt(pow((i-0.5*mx), 2) + pow((j-0.5*my), 2));
-                factor2 = 2*(factor2 - R0) / w;
-                //droplet
-                // rho[i][j] = temp-factor1 * tanh(factor2);
-                //bubble
-                rho[i][j] = temp+factor1 * tanh(factor2);
-                break;
-            }
-            case 4://single bubble or droplet without smooth interface
-            {
-                 if((x[i]-mx/2)*(x[i]-my/2)+(y[j]-mx/2)*(y[j]-my/2)<radius*radius)
-                {
-                    rho[i][j]=rho_l;
-                }
-                else
-                rho[i][j]=rho_g;
+                    if(j<150 & j>50) rho[i][j]=rho_l;
+                    else rho[i][j]=rho_g;
                     break;
-            }
-            case 5: //two bubbles or droplets merge without smooth interface
-            {
-                if((x[i]-mx/2+radius-1)*(x[i]-mx/2+radius-1)+(y[j]-my/2)*(y[j]-my/2)<radius*radius
-            ||(x[i]-mx/2-radius+1)*(x[i]-mx/2-radius+1)+(y[j]-my/2)*(y[j]-my/2)<radius*radius)
-            {
-                rho[i][j]=rho_g;
-            }
-            else
-            rho[i][j]=rho_l;
-                break;
-            }
-            case 6: //elliptical bubble or droplet without smooth interface
-            {
-                if((x[i]-mx/2)*(x[i]-my/2)/(a*a)+(y[j]-mx/2)*(y[j]-my/2)/(b*b)<1)
-            {
-                rho[i][j]=rho_g;
-            }
-            else
-            rho[i][j]=rho_l;
-                break;
-            }
+                }
+                case 2:
+                {
+                    double w=5;//interface thickness
+                    rho[i][j]=rho_g+(rho_l-rho_g)/2.0*(tanh(2*(j-50.0)/w)-tanh(2*(j-150.0)/w));
+                    break;
+                }
             }
         }
     }
@@ -586,7 +511,7 @@ for (time=1;time<mstep+1;++time)
     std::swap(f,f2);
     //Streaming(f);
     Periodic_Boundary_Condition(f);
-    VerifyLapalaceLaw();
+    //VerifyLapalaceLaw();
     //Non_Equilibrium_extrapolation(f);
     //Non_Equilibrium_Bounce_Back(f);
     std::string filename = std::string("animation") +std::to_string(time)+std::string(".dat");
