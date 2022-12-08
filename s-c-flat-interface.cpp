@@ -6,10 +6,10 @@
 int const static n=9,mx=20,my=200; //number of latttice nodes
 int c=2;//different cases
 int eos=2;//different equation of state :: eos=1 and default standard eos. eos=2 C-S equation of state. 
-double R=1.0;
-double A=1.0;
-double B=4.0;
-double T=0.056598;
+double const R=1.0;
+double const A=1.0;
+double const B=4.0;
+double const T=0.09433;
 double f[n][mx][my],f2[n][mx][my],feq[n],rho[mx][my],w[n],ux[mx][my],uy[mx][my],x[mx],y[my];
 const int cx[n]={0, 1, 0, -1, 0, 1, -1, -1, 1};
 const int cy[n]={0, 0, 1, 0, -1, 1, 1, -1, -1};
@@ -17,7 +17,7 @@ double press[mx][my];
 double Fx[mx][my]; // x-component of Shan-Chen force
 double Fy[mx][my]; // y-component of Shan-Chen force
 double forcing[n];
-double rho_l= 2.1,rho_g=0.15;
+double rho_l= 0.14,rho_g=0.12;
 double radius=25;
 double a=mx/10,b=my/5;
 int i,j;
@@ -25,16 +25,17 @@ int dx=1,dy=1; //space and time step
 // double const alpha=0.4;
 // double omega=1.0/(3.*alpha+0.5);
 double omega=1.0;
-int mstep=20; // The total number of time steps
-int freq=1;
+int mstep=20000; // The total number of time steps
+int freq=100;
 double rho0=1.0;//reference density 
-const double g = -5.2;//interaction strength between particles.
+double g = -1;//interaction strength between particles.
+double psi(double dense);
 void result(std::string filename,int time)
 {
 
 std::ofstream out(filename);
   out << "TITLE=\"LBM output\"" << std::endl;
-  out << "VARIABLES = \"X\", \"Y\", \"Ux\",\"Uy\",\"density\",\"pressure\",\"f0\",\"f1\",\"f2\",\"f3\",\"f4\",\"f5\",\"f6\",\"f7\",\"f8\",\"feq0\",\"feq1\",\"feq2\",\"feq3\",\"feq4\",\"feq5\",\"feq6\",\"feq7\",\"feq8\"," << std::endl;
+  out << "VARIABLES = \"X\", \"Y\", \"Ux\",\"Uy\",\"density\",\"pressure\",\"f0\",\"f1\",\"f2\",\"f3\",\"f4\",\"f5\",\"f6\",\"f7\",\"f8\",\"feq0\",\"feq1\",\"feq2\",\"feq3\",\"feq4\",\"feq5\",\"feq6\",\"feq7\",\"feq8\",\"psi\"" << std::endl;
   out << "ZONE T = \"fluid\", I=" << mx << ", J=" << my << ", F=POINT" << std::endl;
   //out << "SOLUTIONTIME="<< time << std::endl;
   for (unsigned j = 0; j < my; ++j)
@@ -47,6 +48,7 @@ std::ofstream out(filename);
         out << std::scientific << std::setprecision(5) << std::setw(15) << uy[i][j];
         out << std::scientific << std::setprecision(5) << std::setw(15) << rho[i][j];
         out << std::scientific << std::setprecision(5) << std::setw(15) << press[i][j];
+        out << std::scientific << std::setprecision(5) << std::setw(15) << psi(rho[i][j]);
       for(int k=0;k<9;k++)
       {
           out << std::scientific << std::setprecision(5) << std::setw(15) << f[k][i][j];
@@ -89,6 +91,12 @@ double psi(double dense)
             {
                 double p=0;
                 p=dense*R*T*(1+B*dense/4+(B*dense/4)*(B*dense/4)-pow(B*dense/4,3.0))/pow((1-B*dense/4),3.0)-A*dense*dense;
+                if((1-B*dense/4)<1e-5) std::cout<<"denominator equals zero"<<std::endl;
+                if(2/(g*1/3)*(p-dense*1/3)<0.0) 
+                {
+                    std::cout<<"negative in the square root"<<std::endl;
+                    //g=-g;
+                }
                 return sqrt(2/(g*1/3)*(p-dense*1/3));
                 break;
             }
@@ -143,8 +151,8 @@ void ComputeVelocity(double ftem[n][mx][my])
                 ux[i][j] += ftem[k][i][j]*cx[k];
                 uy[i][j] += ftem[k][i][j]*cy[k];
             }
-                ux[i][j] += (0.5 * Fx[i][j]);
-                uy[i][j] += (0.5 * Fy[i][j]);
+                // ux[i][j] += (0.5 * Fx[i][j]);
+                // uy[i][j] += (0.5 * Fy[i][j]);
             double dens = ComputeTotalDensity(i,j);
             ux[i][j] /= dens;
             uy[i][j] /= dens;
@@ -154,8 +162,8 @@ void ComputeVelocity(double ftem[n][mx][my])
 void ComputeEquilibrium(int i,int j)
 {
     double dens = rho[i][j];
-    double vx = ux[i][j];
-    double vy = uy[i][j];
+    double vx = ux[i][j]+omega*Fx[i][j]/rho[i][j];
+    double vy = uy[i][j]+omega*Fy[i][j]/rho[i][j];
     double usq = vx * vx + vy * vy;
     // std::cout<<"dens= "<<dens<<std::endl;
     // std::cout<<"vx= "<<vx<<std::endl;
@@ -190,7 +198,7 @@ void Collision(double ftem[n][mx][my],double ftem2[n][mx][my])
                 ComputeGuoForce(i,j,k);
                 int i2 = (i + cx[k] + mx) % mx;
                 int j2 = (j + cy[k] + my) % my;
-                ftem2[k][i2][j2] = ftem[k][i][j] * (1. - omega) + feq[k] * omega + forcing[k] ;
+                ftem2[k][i2][j2] = ftem[k][i][j] * (1. - omega) + feq[k] * omega /*+ forcing[k]*/ ;
             }
         }
     }
