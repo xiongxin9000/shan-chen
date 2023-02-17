@@ -9,26 +9,27 @@ int eos=2;//different equation of state :: eos=1 and default standard eos. eos=2
 double R=1.0;
 double A=1.0;
 double B=4.0;
-double T=0.056598;
-double f[n][mx][my],f2[n][mx][my],feq[n],rho[mx][my],w[n],ux[mx][my],uy[mx][my],x[mx],y[my];
+double T=0.0707475;
+double f[n][mx][my],f2[n][mx][my],feq[n],rho[mx][my],w[n],w_[n],ux[mx][my],uy[mx][my],x[mx],y[my];
 const int cx[n]={0, 1, 0, -1, 0, 1, -1, -1, 1};
 const int cy[n]={0, 0, 1, 0, -1, 1, 1, -1, -1};
 double press[mx][my];
 double Fx[mx][my]; // x-component of Shan-Chen force
 double Fy[mx][my]; // y-component of Shan-Chen force
 double forcing[n];
-double rho_l= 0.40600,rho_g=0.00102067;
+double rho_l= 0.33,rho_g=0.011;
 double radius=25;
 double a=mx/10,b=my/5;
 int i,j;
 int dx=1,dy=1; //space and time step
+int i1;
 // double const alpha=0.4;
 // double omega=1.0/(3.*alpha+0.5);
 double omega=1.0;
-int mstep=20; // The total number of time steps
+int mstep=10; // The total number of time steps
 int freq=1;
 double rho0=1.0;//reference density 
-const double g = -5.2;//interaction strength between particles.
+const double g = -0.1;//interaction strength between particles.
 void result(std::string filename,int time)
 {
 
@@ -89,7 +90,8 @@ double psi(double dense)
             {
                 double p=0;
                 p=dense*R*T*(1+B*dense/4+(B*dense/4)*(B*dense/4)-pow(B*dense/4,3.0))/pow((1-B*dense/4),3.0)-A*dense*dense;
-                return sqrt(2/(g*1/3)*(p-dense*1/3));
+                // return sqrt((p-dense*1/3)/(g*3));
+                return sqrt(6*(p-dense*1/3)/(g));
                 break;
             }
         default:
@@ -143,8 +145,8 @@ void ComputeVelocity(double ftem[n][mx][my])
                 ux[i][j] += ftem[k][i][j]*cx[k];
                 uy[i][j] += ftem[k][i][j]*cy[k];
             }
-                ux[i][j] += (0.5 * Fx[i][j]);
-                uy[i][j] += (0.5 * Fy[i][j]);
+                // ux[i][j] += (0.5 * Fx[i][j]);
+                // uy[i][j] += (0.5 * Fy[i][j]);
             double dens = ComputeTotalDensity(i,j);
             ux[i][j] /= dens;
             uy[i][j] /= dens;
@@ -154,8 +156,8 @@ void ComputeVelocity(double ftem[n][mx][my])
 void ComputeEquilibrium(int i,int j)
 {
     double dens = rho[i][j];
-    double vx = ux[i][j];
-    double vy = uy[i][j];
+    double vx = ux[i][j]+Fx[i][j]/(omega*rho[i][j]);
+    double vy = uy[i][j]+Fy[i][j]/(omega*rho[i][j]);
     double usq = vx * vx + vy * vy;
     // std::cout<<"dens= "<<dens<<std::endl;
     // std::cout<<"vx= "<<vx<<std::endl;
@@ -178,52 +180,66 @@ void ComputeGuoForce(int i,int j,int k)
         ((3. * (cx[k] - ux[i][j]) + 9. * cx[k] * temp) * Fx[i][j] + 
         (3. * (cy[k] - uy[i][j]) + 9. * cy[k] * temp) * Fy[i][j]);
 }
-void Collision(double ftem[n][mx][my],double ftem2[n][mx][my])
+void Collision(double ftem[n][mx][my])
 {
     for(int i=0;i<mx;i++)
     {
         for(int j=0;j<my;j++)
         {
+            ComputeEquilibrium(i,j);
             for (int k=0;k<9;k++)
             {
-                ComputeEquilibrium(i,j);
-                ComputeGuoForce(i,j,k);
-                int i2 = (i + cx[k] + mx) % mx;
-                int j2 = (j + cy[k] + my) % my;
-                ftem2[k][i2][j2] = ftem[k][i][j] * (1. - omega) + feq[k] * omega + forcing[k] ;
+                // ComputeGuoForce(i,j,k);
+                // int i2 = (i + cx[k] + mx) % mx;
+                // int j2 = (j + cy[k] + my) % my;
+                ftem[k][i][j] = ftem[k][i][j] * (1. - omega) + feq[k] * omega /*+ forcing[k]*/ ;
             }
         }
     }
 }
 void Streaming(double ftem[n][mx][my])
 {
-    double f_hlp[9][mx][my];
-    for(int j=0;j<my;j++)
+    for (int j=0;j<my;j++)
     {
-        for (int i=0;i<mx;i++)
+        for(int i=mx-1;i>0;i--)
         {
-            int y_n = (1+j)%my;
-            int x_e = (1+i)%mx;
-            int y_s = my - 1 - (my- j)%my;
-            int x_w = mx - 1 - (mx- i)%mx;
-            f_hlp[1][x_e][j] = ftem[1][i][j];
-            f_hlp[2][i][y_n] = ftem[2][i][j];
-            f_hlp[3][x_w][j] = ftem[3][i][j];
-            f_hlp[4][i][y_s] = ftem[4][i][j];
-            f_hlp[5][x_e][y_n] = ftem[5][i][j];
-            f_hlp[6][x_w][y_n] = ftem[6][i][j];
-            f_hlp[7][x_w][y_s] = ftem[7][i][j];
-            f_hlp[8][x_e][y_s] = ftem[8][i][j];
+            ftem[1][i][j]=ftem[1][i-1][j];
+        }
+        for(int i=0;i<mx;i++)
+        {
+            ftem[3][i][j]=ftem[3][i+1][j];
         }
     }
+
+    for(int j=my-1;j>0;j--)
+    {
+        for(int i=0;i<mx;i++)
+        {
+            ftem[2][i][j]=ftem[2][i][j-1];
+        }
+        for(int i=mx-1;i>0;i--)
+        {
+            ftem[5][i][j]=ftem[5][i-1][j-1];
+        }
+        for(int i=0;i<mx;i++)
+        {
+            ftem[6][i][j]=ftem[6][i+1][j-1];
+        }
+    }
+
     for(int j=0;j<my;j++)
     {
-        for (int i=0;i<mx;i++)
+        for(int i=0;i<mx;i++)
         {
-            for(int k=1;k<9;k++)
-            {
-                ftem[k][i][j]=f_hlp[k][i][j];
-            }
+            ftem[4][i][j]=ftem[4][i][j+1];
+        }
+        for(int i=0;i<mx;i++)
+        {
+            ftem[7][i][j]=ftem[7][i+1][j+1];
+        }
+        for(int i=mx-1;i>0;i--)
+        {
+            ftem[8][i][j]=ftem[8][i-1][j+1];
         }
     }
 }
@@ -298,14 +314,16 @@ for (j=1;j<my;j++)
 
 std::cout<<"omega= "<<omega<<std::endl;
 /*-------weight factor ------*/
-w[0]=4./9;
+w[0]=4./9.;
     for(i=1;i<5;i++)
     {
-        w[i]=1./9;
+        w[i]=1./9.;
+        w_[i]=1./3.;
     }
     for(i=5;i<9;i++)
     {
-        w[i]=1./36;
+        w[i]=1./36.;
+        w_[i]=1./12.;
     }
 /*---------weight factor ----------*/
 /*initial condition--------------*/
@@ -313,7 +331,7 @@ w[0]=4./9;
     {
         for (int j=0;j<my;j++)
         {
-            double w=10;
+            double w=2;
             double factor1 = 0.5 * (rho_l-rho_g);
             double temp=0.5 * (rho_l+rho_g);
             double factor2 = sqrt(pow((i-0.5*mx), 2) + pow((j-0.5*my), 2));
@@ -375,10 +393,10 @@ w[0]=4./9;
             {
                  if((x[i]-mx/2)*(x[i]-my/2)+(y[j]-mx/2)*(y[j]-my/2)<radius*radius)
                 {
-                    rho[i][j]=rho_l;
+                    rho[i][j]=rho_g;
                 }
                 else
-                rho[i][j]=rho_g;
+                rho[i][j]=rho_l;
                     break;
             }
             case 5: //two bubbles or droplets merge without smooth interface
@@ -428,7 +446,7 @@ void Non_Equilibrium_Bounce_Back(double ftemp[n][mx][my])
     for (int j=1;j<my-1;j++)
     {
         uy[0][j]=0.0;
-        rho[0][j]=3.0;
+        rho[0][j]=rho_l;
         ux[0][j]=1.0-(ftemp[0][0][j]+ftemp[2][0][j]+ftemp[4][0][j]+2.0*(ftemp[3][0][j]+ftemp[6][0][j]+ftemp[7][0][j]))/rho[0][j];
         ftemp[1][0][j]=ftemp[3][0][j]+2.0/3.0*rho[0][j]*ux[0][j];
         ftemp[5][0][j]=ftemp[7][0][j]-1.0/2.0*(ftemp[2][0][j]-ftemp[4][0][j])+1.0/6.0*rho[0][j]*ux[0][j];
@@ -438,7 +456,7 @@ void Non_Equilibrium_Bounce_Back(double ftemp[n][mx][my])
 for (int j=1;j<my-1;j++)
     {
         uy[mx-1][j]=0.0;
-        rho[mx-1][j]=3.0;
+        rho[mx-1][j]=rho_l;
         ux[mx-1][j]=(ftemp[0][mx-1][j]+ftemp[2][mx-1][j]+ftemp[4][mx-1][j]+2.0*(ftemp[1][mx-1][j]+ftemp[5][mx-1][j]+ftemp[8][mx-1][j]))/rho[mx-1][j]-1;
         ftemp[3][mx-1][j]=ftemp[1][mx-1][j]-2.0/3.0*rho[mx-1][j]*ux[mx-1][j];
         ftemp[6][mx-1][j]=ftemp[8][mx-1][j]-1.0/2.0*(ftemp[2][mx-1][j]-ftemp[4][mx-1][j])-1.0/6.0*rho[mx-1][j]*ux[mx-1][j];
@@ -448,7 +466,7 @@ for (int j=1;j<my-1;j++)
 for (int i=1;i<mx-1;i++)
     {
         ux[i][my-1]=0.0;
-        rho[i][my-1]=3.0;
+        rho[i][my-1]=rho_l;
         uy[i][my-1]=(ftemp[0][i][my-1]+ftemp[1][i][my-1]+ftemp[3][i][my-1]+2.0*(ftemp[2][i][my-1]+ftemp[5][i][my-1]+ftemp[6][i][my-1]))/rho[i][my-1]-1;
         ftemp[4][i][my-1]=ftemp[2][i][my-1]-2.0/3.0*rho[i][my-1]*uy[i][my-1];
         ftemp[7][i][my-1]=ftemp[5][i][my-1]+1.0/2.0*(ftemp[1][i][my-1]-ftemp[3][i][my-1])-1.0/6.0*rho[i][my-1]*uy[i][my-1];
@@ -458,12 +476,55 @@ for (int i=1;i<mx-1;i++)
 for (int i=1;i<mx-1;i++)
     {
         ux[i][0]=0.0;
-        rho[i][0]=3.0;
+        rho[i][0]=rho_l;
         uy[i][0]=1-(ftemp[0][i][0]+ftemp[1][i][0]+ftemp[3][i][0]+2.0*(ftemp[4][i][0]+ftemp[7][i][0]+ftemp[8][i][0]))/rho[i][0];
         ftemp[2][i][0]=ftemp[4][i][0]+2.0/3.0*rho[i][0]*uy[i][0];
         ftemp[5][i][0]=ftemp[7][i][0]-1.0/2.0*(ftemp[1][i][0]-ftemp[3][i][0])+1.0/6.0*rho[i][0]*uy[i][0];
         ftemp[6][i][0]=ftemp[8][i][0]+1.0/2.0*(ftemp[1][i][0]-ftemp[3][i][0])+1.0/6.0*rho[i][0]*uy[i][0];
     }
+    //corner
+    // Corner nodes
+
+// Bottom left (inlet)
+ux[0][0]=0.0;
+uy[0][0]=0.0;
+rho[0][0]=rho_l;
+f[1][i][j] =f[3][i][j];
+f[2][i][j] =f[4][i][j];
+f[5][i][j] =f[7][i][j];
+f[6][i][j]=1/2*(rho[0][0]-(f[0][i][j]+f[1][i][j]+f[2][i][j]+f[3][i][j]+f[4][i][j]+f[5][i][j]+f[7][i][j]));
+f[8][i][j]=f[6][i][j];
+
+//Bottom right
+i=mx-1; j=0;
+ux[i][j]=0.0;
+uy[i][j]=0.0;
+rho[i][j]=rho_l;
+f[2][i][j]=f[4][i][j];
+f[3][i][j] =f[1][i][j];
+f[6][i][j]=f[8][i][j];
+f[7][i][j] =1/2*(rho[i][j]-(f[0][i][j]+f[1][i][j]+f[2][i][j]+f[3][i][j]+f[4][i][j]+f[6][i][j]+f[8][i][j]));
+f[5][i][j] =f[7][i][j];
+//Top left
+i=0; j=my-1;
+ux[i][j]=0.0;
+uy[i][j]=0.0;
+rho[i][j]=rho_l;
+f[1][i][j] =f[3][i][j];
+f[4][i][j] =f[2][i][j];
+f[8][i][j] =f[6][i][j];
+f[7][i][j] =1/2*(rho[i][j]-(f[0][i][j]+f[1][i][j]+f[2][i][j]+f[3][i][j]+f[4][i][j]+f[6][i][j]+f[8][i][j]));
+f[5][i][j] =f[7][i][j];
+//Top right
+int i=mx-1; int j=my-1;
+ux[i][j]=0.0;
+uy[i][j]=0.0;
+rho[i][j]=rho_l;
+f[3][i][j] =f[1][i][j];
+f[4][i][j] =f[2][i][j];
+f[7][i][j] =f[5][i][j];
+f[6][i][j]=1/2*(rho[i][j]-(f[0][i][j]+f[1][i][j]+f[2][i][j]+f[3][i][j]+f[4][i][j]+f[5][i][j]+f[7][i][j]));
+f[8][i][j]=f[6][i][j];
 }
 
 void VerifyLapalaceLaw()
@@ -523,6 +584,7 @@ for (int i = 0; i < 4; i++)
     double rad;
     for (int i = 0; i < mx / 2; i++) {
         if (rho[i][y] < rho_av) {
+            i1=i+5;
             const double drho = rho[i-1][y] - rho[i][y];
             const double dx = (rho_av - rho[i][y]) / drho;
             rad = (mx / 2. - i) + dx;
@@ -536,6 +598,7 @@ for (int i = 0; i < 4; i++)
         out << std::scientific << std::setprecision(5) << std::setw(15) << delta_press;
         out << std::scientific << std::setprecision(5) << std::setw(15) << 1./rad;
         out << std::scientific << std::setprecision(5) << std::setw(15) << delta_press*rad;
+        // out << std::scientific << std::setprecision(5) << std::setw(15) << press_gas;
         out << std::endl;
     out.close();
 }
@@ -576,19 +639,20 @@ int main()
 initialize();
 int time=0;
 std::string filename = std::string("animation") +std::to_string(time)+std::string(".dat");
+VerifyLapalaceLaw();
 result(filename,time);
 for (time=1;time<mstep+1;++time)
 {
     ComputeDesnity(f);
-    ComputeSCForce();//only novelty which contribute to equilibrium velocity and macroscopic velocity 
     ComputeVelocity(f);
-    Collision(f,f2);//plus GuoForce 
-    std::swap(f,f2);
-    //Streaming(f);
-    Periodic_Boundary_Condition(f);
+    ComputeSCForce();//only novelty which contribute to equilibrium velocity and macroscopic velocity 
+    Collision(f);//plus GuoForce 
+    // std::swap(f,f2);
+    Streaming(f);
+    // Periodic_Boundary_Condition(f);
+    // Non_Equilibrium_extrapolation(f);
+    Non_Equilibrium_Bounce_Back(f);
     VerifyLapalaceLaw();
-    //Non_Equilibrium_extrapolation(f);
-    //Non_Equilibrium_Bounce_Back(f);
     std::string filename = std::string("animation") +std::to_string(time)+std::string(".dat");
     if(time%freq==0) result(filename,time);
     if(time%freq==0)
